@@ -21,7 +21,7 @@ YDEJp
    ```
 2. Navigate to the project directory:
    ```bash
-   cd teneo-bot
+   cd teneo-airdrop_tricksyt
    ```
 4. Install the necessary dependencies:
    ```bash
