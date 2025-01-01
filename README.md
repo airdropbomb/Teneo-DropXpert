@@ -17,7 +17,7 @@ YDEJp
 
 1. Clone the repository to your local machine:
    ```bash
-   git clone https://github.com/im-hanzou/teneo-bot.git
+   git clone https://github.com/airdroptricks/teneo-airdrop_tricksyt.git
    ```
 2. Navigate to the project directory:
    ```bash
