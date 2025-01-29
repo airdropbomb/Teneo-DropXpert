@@ -131,11 +131,11 @@ function generateBrowserId(index) {
 function displayHeader() {
   const width = process.stdout.columns;
   const headerLines = [
-    "<|============================================|>",
-    "                Teneo Bot NEW                   ",
-    "     https://github.com/0xZxcrypto/Teneoxyz     ",
-    "<|============================================|>"
-  ];
+    <|============================================|>
+                    Teneo Bot UPDATED                   
+               https://github.com/DropXpert     
+               https://t.me/DropXpert5
+    <|============================================|>
 
   console.log("");
   headerLines.forEach(line => {
