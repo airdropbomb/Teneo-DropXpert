@@ -19,8 +19,8 @@ but `I think` there is no reason to ban the account, because this is not cheatin
 ## ✎ᝰ. RUNNING 
 - Clone Repository
 ```bash
-git clone https://github.com/DropXpert/Teneo-airdrop_tricksyt.git
-cd Teneo-airdrop_tricksyt
+git clone https://github.com/DropXpert/Teneo-DropXpert.git
+cd Teneo-DropXpert
 ```
 - Install Dependency
 ```bash
