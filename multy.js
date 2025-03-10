@@ -13,6 +13,7 @@ async function readFile(filePath) {
         return [];
     }
 }
+
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -41,24 +42,24 @@ class WebSocketClient {
 
         this.socket.onopen = () => {
             const connectionTime = new Date().toISOString();
-            console.log("WebSocket connected at", connectionTime);
+            console.log(`WebSocket connected at ${connectionTime}`);
             this.reconnectAttempts = 0;
             this.startPinging();
         };
 
         this.socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            console.log("Received message from WebSocket:", data);
+            console.log(`Received message from WebSocket at ${new Date().toISOString()}:`, data);
         };
 
         this.socket.onclose = () => {
-            console.log("WebSocket disconnected");
+            console.log(`WebSocket disconnected at ${new Date().toISOString()}`);
             this.stopPinging();
             this.reconnect();
         };
 
         this.socket.onerror = (error) => {
-            console.error("WebSocket error:", error.message);
+            console.error(`WebSocket error at ${new Date().toISOString()}:`, error.message);
         };
     }
 
@@ -84,8 +85,9 @@ class WebSocketClient {
         this.pingInterval = setInterval(() => {
             if (this.socket && this.socket.readyState === WebSocket.OPEN) {
                 this.socket.send(JSON.stringify({ type: "PING" }));
+                console.log(`Ping sent at ${new Date().toISOString()}`);
             }
-        }, 10000);
+        }, 10000); // 10 seconds
     }
 
     stopPinging() {
@@ -95,6 +97,7 @@ class WebSocketClient {
         }
     }
 }
+
 async function main() {
     try {
         const tokens = await readFile('tokens.txt');
