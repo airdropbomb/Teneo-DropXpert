@@ -19,7 +19,7 @@ but `I think` there is no reason to ban the account, because this is not cheatin
 ## ✎ᝰ. RUNNING 
 - Clone Repository
 ```bash
-git clone https://github.com/DropXpert/Teneo-DropXpert.git
+git clone https://github.com/airdropbomb/Teneo-DropXpert.git
 cd Teneo-DropXpert
 ```
 - Install Dependency
