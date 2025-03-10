@@ -1,144 +1,84 @@
 const WebSocket = require('ws');
 const fs = require('fs/promises');
 const HttpsProxyAgent = require('https-proxy-agent');
-const readline = require('readline');
 
 async function readFile(filePath) {
     try {
         const data = await fs.readFile(filePath, 'utf-8');
-        const tokens = data.split('\n').map(line => line.trim()).filter(line => line);
-        return tokens;
+        return data.split('\n').map(line => line.trim()).filter(line => line);
     } catch (error) {
         console.error('Error reading file:', error.message);
         return [];
     }
 }
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
+async function getEmailFromToken(token) {
+    try {
+        const response = await fetch("https://api.teneo.pro/userinfo", {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await response.json();
+        return data.email || "Unknown";
+    } catch (error) {
+        console.error("❌ Failed to fetch email:", error.message);
+        return "Unknown";
+    }
+}
 
 class WebSocketClient {
     constructor(token, proxy = null) {
         this.token = token;
         this.proxy = proxy;
         this.socket = null;
-        this.pingInterval = null;
-        this.reconnectAttempts = 0;
-        this.wsUrl = "wss://secure.ws.teneo.pro";
-        this.version = "v0.2";
+        this.email = "Unknown";
     }
 
     async connect() {
-        const wsUrl = `${this.wsUrl}/websocket?accessToken=${encodeURIComponent(this.token)}&version=${encodeURIComponent(this.version)}`;
+        this.email = await getEmailFromToken(this.token); // Token မှာ Email ရှာမယ်
+        const wsUrl = `wss://secure.ws.teneo.pro/websocket?accessToken=${encodeURIComponent(this.token)}`;
 
-        const options = {};
-        if (this.proxy) {
-            options.agent = new HttpsProxyAgent(this.proxy);
-        }
-
+        const options = this.proxy ? { agent: new HttpsProxyAgent(this.proxy) } : {};
         this.socket = new WebSocket(wsUrl, options);
 
         this.socket.onopen = () => {
-            console.log(`✅ Connected: ${new Date().toISOString()} | Token: ${this.token}`);
-            
-            // Send IDENTIFY message after connection
-            this.socket.send(JSON.stringify({ type: "IDENTIFY", token: this.token }));
-            
-            this.reconnectAttempts = 0;
-            this.startPinging();
+            console.log(`✅ Connected as ${this.email} | Token: ${this.token}`);
+            this.socket.send(JSON.stringify({ type: "IDENTIFY", token: this.token })); 
         };
 
         this.socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            console.log(`📩 Response at ${new Date().toISOString()} | Token: ${this.token}`, data);
+            if (data.type === "IDENTIFIED" && data.user && data.user.email) {
+                this.email = data.user.email;
+                console.log(`✅ Identified: ${this.email}`);
+            } else {
+                console.log(`📩 Response for ${this.email}:`, data);
+            }
         };
 
         this.socket.onclose = () => {
-            console.log(`❌ Disconnected at ${new Date().toISOString()} | Token: ${this.token}`);
-            this.stopPinging();
-            this.reconnect();
+            console.log(`❌ Disconnected: ${this.email}`);
         };
 
         this.socket.onerror = (error) => {
-            console.error(`⚠️ WebSocket error at ${new Date().toISOString()} | Token: ${this.token}:`, error.message);
+            console.error(`⚠️ WebSocket error for ${this.email}:`, error.message);
         };
-    }
-
-    reconnect() {
-        const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
-        console.log(`🔄 Reconnecting in ${delay / 1000} seconds... | Token: ${this.token}`);
-        setTimeout(() => {
-            this.reconnectAttempts++;
-            this.connect();
-        }, delay);
-    }
-
-    disconnect() {
-        if (this.socket) {
-            this.socket.close();
-            this.socket = null;
-            this.stopPinging();
-        }
-    }
-
-    startPinging() {
-        this.stopPinging();
-        this.pingInterval = setInterval(() => {
-            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-                this.socket.send(JSON.stringify({ type: "PING", token: this.token }));
-                console.log(`📡 Ping sent at ${new Date().toISOString()} | Token: ${this.token}`);
-            }
-        }, 10000);
-    }
-
-    stopPinging() {
-        if (this.pingInterval) {
-            clearInterval(this.pingInterval);
-            this.pingInterval = null;
-        }
     }
 }
 
 async function main() {
-    try {
-        const tokens = await readFile('tokens.txt');
-        rl.question('Do you want to use a proxy? (y/n): ', async (useProxyAnswer) => {
-            let useProxy = useProxyAnswer.toLowerCase() === 'y';
-            let proxies = [];
+    const tokens = await readFile('tokens.txt');
+    const proxies = await readFile('proxies.txt');
 
-            if (useProxy) {
-                proxies = await readFile('proxies.txt');
-            }
-
-            if (tokens.length > 0) {
-                const wsClients = [];
-
-                for (let i = 0; i < tokens.length; i++) {
-                    const token = tokens[i];
-                    const proxy = proxies[i % proxies.length] || null;
-                    console.log(`🚀 Connecting WebSocket for account ${i + 1} | Proxy: ${proxy || 'None'}`);
-
-                    const wsClient = new WebSocketClient(token, proxy);
-                    wsClient.connect();
-                    wsClients.push(wsClient);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-
-                process.on('SIGINT', () => {
-                    console.log('🛑 Exiting... Disconnecting all WebSockets...');
-                    wsClients.forEach(client => client.stopPinging());
-                    wsClients.forEach(client => client.disconnect());
-                    process.exit(0);
-                });
-            } else {
-                console.log('⚠️ No tokens found in tokens.txt - exiting...');
-                process.exit(0);
-            }
-        });
-    } catch (error) {
-        console.error('❌ Error in main function:', error);
+    if (tokens.length > 0) {
+        for (let i = 0; i < tokens.length; i++) {
+            const token = tokens[i];
+            const proxy = proxies[i % proxies.length] || null;
+            const wsClient = new WebSocketClient(token, proxy);
+            wsClient.connect();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    } else {
+        console.log('⚠️ No tokens found in tokens.txt - exiting...');
     }
 }
 
