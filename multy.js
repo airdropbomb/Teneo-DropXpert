@@ -41,31 +41,34 @@ class WebSocketClient {
         this.socket = new WebSocket(wsUrl, options);
 
         this.socket.onopen = () => {
-            const connectionTime = new Date().toISOString();
-            console.log(`WebSocket connected at ${connectionTime}`);
+            console.log(`✅ Connected: ${new Date().toISOString()} | Token: ${this.token}`);
+            
+            // Send IDENTIFY message after connection
+            this.socket.send(JSON.stringify({ type: "IDENTIFY", token: this.token }));
+            
             this.reconnectAttempts = 0;
             this.startPinging();
         };
 
         this.socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            console.log(`Received message from WebSocket at ${new Date().toISOString()}:`, data);
+            console.log(`📩 Response at ${new Date().toISOString()} | Token: ${this.token}`, data);
         };
 
         this.socket.onclose = () => {
-            console.log(`WebSocket disconnected at ${new Date().toISOString()}`);
+            console.log(`❌ Disconnected at ${new Date().toISOString()} | Token: ${this.token}`);
             this.stopPinging();
             this.reconnect();
         };
 
         this.socket.onerror = (error) => {
-            console.error(`WebSocket error at ${new Date().toISOString()}:`, error.message);
+            console.error(`⚠️ WebSocket error at ${new Date().toISOString()} | Token: ${this.token}:`, error.message);
         };
     }
 
     reconnect() {
         const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
-        console.log(`Reconnecting in ${delay / 1000} seconds...`);
+        console.log(`🔄 Reconnecting in ${delay / 1000} seconds... | Token: ${this.token}`);
         setTimeout(() => {
             this.reconnectAttempts++;
             this.connect();
@@ -84,10 +87,10 @@ class WebSocketClient {
         this.stopPinging();
         this.pingInterval = setInterval(() => {
             if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-                this.socket.send(JSON.stringify({ type: "PING" }));
-                console.log(`Ping sent at ${new Date().toISOString()}`);
+                this.socket.send(JSON.stringify({ type: "PING", token: this.token }));
+                console.log(`📡 Ping sent at ${new Date().toISOString()} | Token: ${this.token}`);
             }
-        }, 10000); // 10 seconds
+        }, 10000);
     }
 
     stopPinging() {
@@ -115,7 +118,7 @@ async function main() {
                 for (let i = 0; i < tokens.length; i++) {
                     const token = tokens[i];
                     const proxy = proxies[i % proxies.length] || null;
-                    console.log(`Connecting WebSocket for account: ${i + 1} - Proxy: ${proxy || 'None'}`);
+                    console.log(`🚀 Connecting WebSocket for account ${i + 1} | Proxy: ${proxy || 'None'}`);
 
                     const wsClient = new WebSocketClient(token, proxy);
                     wsClient.connect();
@@ -124,18 +127,18 @@ async function main() {
                 }
 
                 process.on('SIGINT', () => {
-                    console.log('Program exited. Stopping pinging and disconnecting All WebSockets...');
+                    console.log('🛑 Exiting... Disconnecting all WebSockets...');
                     wsClients.forEach(client => client.stopPinging());
                     wsClients.forEach(client => client.disconnect());
                     process.exit(0);
                 });
             } else {
-                console.log('No tokens found in tokens.txt - exiting...');
+                console.log('⚠️ No tokens found in tokens.txt - exiting...');
                 process.exit(0);
             }
         });
     } catch (error) {
-        console.error('Error in main function:', error);
+        console.error('❌ Error in main function:', error);
     }
 }
 
