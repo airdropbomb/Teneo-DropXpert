@@ -5,6 +5,7 @@ const readline = require('readline');
 const axios = require('axios');
 const HttpsProxyAgent = require('https-proxy-agent');
 const chalk = require('chalk');
+const puppeteer = require('puppeteer');
 
 console.log(chalk.cyan.bold(`                 Running Teneo Node BETA CLI Version                 `));
 console.log(chalk.cyan.bold(`                t.me/DropXpert5 *** github.com/DropXpert               `));
@@ -18,7 +19,7 @@ let pointsTotal = 0;
 let pointsToday = 0;
 let retryDelay = 1000;
 
-const auth = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlra25uZ3JneHV4Z2pocGxicGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjU0MzgxNTAsImV4cCI6MjA0MTAxNDE1MH0.DRAvf8nH1ojnJBc3rD_Nw6t1AV8X_g6gmY_HByG2Mag"
+const auth = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlra25uZ3JneHV4Z2pocGxicGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjU0MzgxNTAsImV4cCI6MjA0MTAxNDE1MH0.DRAvf8nH1ojnJBc3rD_Nw6t1AV8X_g6gmY_HByG2Mag";
 const reffCode = "OwAG3kib1ivOJG4Y0OCZ8lJETa6ypvsDtGmdhcjB";
 
 const readFileAsync = promisify(fs.readFile);
@@ -130,7 +131,7 @@ process.on('SIGINT', () => {
 function startCountdownAndPoints() {
   clearInterval(countdownInterval);
   updateCountdownAndPoints();
-  countdownInterval = setInterval(updateCountdownAndPoints, 60 * 1000); // 1 minute interval
+  countdownInterval = setInterval(updateCountdownAndPoints, 60 * 1000);
 }
 
 async function updateCountdownAndPoints() {
@@ -171,15 +172,46 @@ async function updateCountdownAndPoints() {
   await setLocalStorage({ potentialPoints, countdown });
 }
 
+// Puppeteer နဲ့ Turnstile Token ထုတ်ယူတဲ့ Function
+async function getTurnstileToken() {
+  try {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto('https://auth.teneo.pro'); // Teneo login page (လိုအပ်ရင် ပြင်ပါ)
+    await page.waitForSelector('.cf-turnstile', { timeout: 10000 }); // Turnstile widget ကို စောင့်ပါ
+    const token = await page.evaluate(() => {
+      return document.querySelector('[name=cf-turnstile-response]')?.value || null;
+    });
+    await browser.close();
+
+    if (!token) {
+      throw new Error("Failed to retrieve Turnstile token.");
+    }
+    console.log("Turnstile Token retrieved:", token);
+    return token;
+  } catch (error) {
+    console.error("Error retrieving Turnstile token:", error.message);
+    return null;
+  }
+}
+
 async function getUserId(proxy) {
   const loginUrl = "https://auth.teneo.pro/api/login";
+  const turnstileToken = await getTurnstileToken();
+
+  if (!turnstileToken) {
+    console.error("Cannot proceed without Turnstile token. Exiting...");
+    rl.close();
+    return;
+  }
 
   rl.question('Email: ', (email) => {
     rl.question('Password: ', async (password) => {
       try {
         const response = await axios.post(loginUrl, {
           email: email,
-          password: password
+          password: password,
+          "cf-turnstile-response": turnstileToken // Turnstile token ထည့်ပေးထားပါတယ်
         }, {
           headers: {
             'x-api-key': reffCode
@@ -187,7 +219,6 @@ async function getUserId(proxy) {
         });
 
         const access_token = response.data.access_token;
-
         await setLocalStorage({ access_token });
         await startCountdownAndPoints();
         await connectWebSocket(access_token, proxy);
@@ -203,6 +234,13 @@ async function getUserId(proxy) {
 async function registerUser() {
   const isExistUrl = 'https://auth.teneo.pro/api/check-user-exists';
   const signupUrl = "https://node-b.teneo.pro/auth/v1/signup";
+  const turnstileToken = await getTurnstileToken();
+
+  if (!turnstileToken) {
+    console.error("Cannot proceed without Turnstile token. Exiting...");
+    rl.close();
+    return;
+  }
 
   rl.question('Enter your email: ', (email) => {
     rl.question('Enter your password: ', (password) => {
@@ -224,7 +262,8 @@ async function registerUser() {
               data: { invited_by: invitedBy },
               gotrue_meta_security: {},
               code_challenge: null,
-              code_challenge_method: null
+              code_challenge_method: null,
+              "cf-turnstile-response": turnstileToken // Turnstile token ထည့်ပေးထားပါတယ်
             }, {
               headers: {
                 'apikey': auth,
@@ -236,7 +275,7 @@ async function registerUser() {
             });
           }
 
-          console.log('Registration successful Please Confirm your email at :', email);
+          console.log('Registration successful. Please confirm your email at:', email);
         } catch (error) {
           console.error('Error during registration:', error.response ? error.response.data : error.message);
         } finally {
@@ -272,10 +311,10 @@ async function main() {
             break;
           case '3':
             rl.question('Please enter your access token: ', async (accessToken) => {
-              userToken = accessToken;
-              await setLocalStorage({ userToken });
+              access_token = accessToken;
+              await setLocalStorage({ access_token });
               await startCountdownAndPoints();
-              await connectWebSocket(userToken, proxy);
+              await connectWebSocket(access_token, proxy);
               rl.close();
             });
             break;
@@ -309,5 +348,6 @@ async function main() {
     }
   });
 }
-//run
+
+// Run the main function
 main();
