@@ -87,7 +87,7 @@ class WebSocketClient {
                 this.socket.send(JSON.stringify({ type: "PING" }));
                 console.log(`Ping sent at ${new Date().toISOString()}`);
             }
-        }, 10000); // 10 seconds
+        }, 60000); // 60 seconds
     }
 
     stopPinging() {
