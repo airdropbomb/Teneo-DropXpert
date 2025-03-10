@@ -1,28 +1,3 @@
-const WebSocket = require('ws');
-const fs = require('fs/promises');
-const HttpsProxyAgent = require('https-proxy-agent');
-const readline = require('readline');
-
-async function readFile(filePath) {
-    try {
-        const data = await fs.readFile(filePath, 'utf-8');
-        return data.split('\n').map(line => line.trim()).filter(line => line);
-    } catch (error) {
-        console.error('❌ Error reading file:', error.message);
-        return [];
-    }
-}
-
-// Token ကို Hide လုပ်မယ့် Function
-function maskToken(token) {
-    return token.slice(0, 6) + "..." + token.slice(-6);
-}
-
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
-
 class WebSocketClient {
     constructor(token, proxy = null) {
         this.token = token;
@@ -47,7 +22,7 @@ class WebSocketClient {
             console.log(`✅ Connected as ${this.email} | Token: ${maskedToken}`);
             this.reconnectAttempts = 0;
             this.startPinging();
-            this.socket.send(JSON.stringify({ type: "IDENTIFY", token: this.token })); // Account Data ရယူရန်
+            this.socket.send(JSON.stringify({ type: "IDENTIFY", token: this.token })); // Account Info ရယူမယ်
         };
 
         this.socket.onmessage = (event) => {
@@ -74,29 +49,12 @@ class WebSocketClient {
         };
     }
 
-    reconnect() {
-        const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
-        console.log(`🔄 Reconnecting in ${delay / 1000} seconds...`);
-        setTimeout(() => {
-            this.reconnectAttempts++;
-            this.connect();
-        }, delay);
-    }
-
-    disconnect() {
-        if (this.socket) {
-            this.socket.close();
-            this.socket = null;
-            this.stopPinging();
-        }
-    }
-
     startPinging() {
         this.stopPinging();
         this.pingInterval = setInterval(() => {
             if (this.socket && this.socket.readyState === WebSocket.OPEN) {
                 this.socket.send(JSON.stringify({ type: "PING" }));
-                console.log(`📡 Ping sent at ${new Date().toISOString()}`);
+                console.log(`📡 Ping sent for ${this.email} | Token: ${maskToken(this.token)} at ${new Date().toISOString()}`);
             }
         }, 10000); // 10 seconds
     }
@@ -108,45 +66,3 @@ class WebSocketClient {
         }
     }
 }
-
-async function main() {
-    try {
-        const tokens = await readFile('tokens.txt');
-        rl.question('🛡 Do you want to use a proxy? (y/n): ', async (useProxyAnswer) => {
-            let useProxy = useProxyAnswer.toLowerCase() === 'y';
-            let proxies = [];
-
-            if (useProxy) {
-                proxies = await readFile('proxies.txt');
-            }
-
-            if (tokens.length > 0) {
-                const wsClients = [];
-
-                for (let i = 0; i < tokens.length; i++) {
-                    const token = tokens[i];
-                    const proxy = proxies[i % proxies.length] || null;
-                    console.log(`🚀 Connecting WebSocket for account ${i + 1} - Proxy: ${proxy || 'None'}`);
-
-                    const wsClient = new WebSocketClient(token, proxy);
-                    wsClient.connect();
-                    wsClients.push(wsClient);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-
-                process.on('SIGINT', () => {
-                    console.log('🛑 Stopping all WebSockets...');
-                    wsClients.forEach(client => client.disconnect());
-                    process.exit(0);
-                });
-            } else {
-                console.log('❌ No tokens found in tokens.txt - exiting...');
-                process.exit(0);
-            }
-        });
-    } catch (error) {
-        console.error('❌ Error in main function:', error);
-    }
-}
-
-main();
